@@ -505,13 +505,13 @@ let adminPassword = ''; // cached for session after sign-in
 //  API HELPERS
 // ═══════════════════════════════════════════════════════
 async function apiGetWord() {
-  const res = await fetch('/api/get-word');
+  const res = await fetch('/.netlify/functions/get-word');
   const data = await res.json();
   return (data.word || FALLBACK_WORD).toUpperCase();
 }
 
 async function apiSetWord(word, password) {
-  const res = await fetch('/api/set-word', {
+  const res = await fetch('/.netlify/functions/set-word', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ word, password })
@@ -520,7 +520,7 @@ async function apiSetWord(word, password) {
 }
 
 async function apiChangePassword(password, newPassword) {
-  const res = await fetch('/api/set-word', {
+  const res = await fetch('/.netlify/functions/set-word', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password, newPassword })
