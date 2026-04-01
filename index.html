@@ -470,12 +470,9 @@
       <div class="admin-action-stack">
         <button class="btn btn-primary" id="deploy-btn" onclick="setNewWord()">✔ Deploy Word</button>
         <hr class="divider">
-        <div class="field-group" style="margin-bottom:8px">
-          <label class="field-label">Change Password</label>
-          <input type="password" class="field-input password" id="new-password-input" placeholder="New password">
-          <div class="field-hint success hidden" id="pw-success">Password updated!</div>
+        <div class="field-hint" style="text-align:center; padding: 4px 0">
+          To change the admin password, update the<br><strong>ADMIN_PASSWORD</strong> environment variable in Netlify.
         </div>
-        <button class="btn btn-secondary" id="update-pw-btn" onclick="changePassword()">Update Password</button>
         <button class="btn btn-danger" onclick="closeAdmin()">✕ Close</button>
       </div>
     </div>
@@ -505,7 +502,8 @@ let adminPassword = ''; // cached for session after sign-in
 //  API HELPERS
 // ═══════════════════════════════════════════════════════
 async function apiGetWord() {
-  const res = await fetch('/.netlify/functions/get-word');
+  // Reads directly from static word.json — fast, unlimited, no function call
+  const res = await fetch('/word.json?t=' + Date.now());
   const data = await res.json();
   return (data.word || FALLBACK_WORD).toUpperCase();
 }
@@ -520,12 +518,9 @@ async function apiSetWord(word, password) {
 }
 
 async function apiChangePassword(password, newPassword) {
-  const res = await fetch('/.netlify/functions/set-word', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password, newPassword })
-  });
-  return res.json();
+  // Password is now purely validated server-side via ADMIN_PASSWORD env var
+  // This is a no-op stub kept for UI compatibility
+  return { error: 'Password changes must be made via Netlify environment variables.' };
 }
 
 // ═══════════════════════════════════════════════════════
@@ -807,13 +802,14 @@ async function setNewWord() {
   }
 
   const btn = document.getElementById('deploy-btn');
-  btn.textContent = 'Saving…'; btn.disabled = true;
+  btn.textContent = 'Deploying…'; btn.disabled = true;
+  hint.textContent = 'Saving word and triggering redeploy…';
+  hint.className   = 'field-hint';
 
   try {
     const result = await apiSetWord(input, adminPassword);
     if (result.error) {
       if (result.error === 'Unauthorized') {
-        // Wrong password — kick back to login
         document.getElementById('admin-panel-view').classList.add('hidden');
         document.getElementById('admin-locked-view').classList.remove('hidden');
         document.getElementById('admin-error').classList.remove('hidden');
@@ -822,13 +818,14 @@ async function setNewWord() {
         hint.className   = 'field-hint error';
       }
     } else {
-      targetWord = input;
       document.getElementById('admin-current-word').textContent = input;
-      hint.textContent = `✔ Word updated to: ${input}`;
-      hint.className   = 'field-hint success';
       document.getElementById('new-word-input').value = '';
+      hint.textContent = '✔ Deployed! The new word will be live for everyone in ~20 seconds.';
+      hint.className   = 'field-hint success';
+      showToast(`Word set to: ${input} — deploying…`, 'success');
+      // Update local game immediately for admin preview
+      targetWord = input;
       resetGame();
-      showToast(`Word updated to: ${input}`, 'success');
     }
   } catch (e) {
     hint.textContent = '⚠ Network error. Please try again.';
