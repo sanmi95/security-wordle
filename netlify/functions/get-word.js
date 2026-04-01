@@ -1,26 +1,20 @@
-exports.handler = async function (event, context) {
+const { getStore } = require("@netlify/blobs");
+
+exports.handler = async function () {
   try {
-    const { blobs } = context;
-    if (!blobs) {
-      return {
-        statusCode: 200,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ word: process.env.DEFAULT_WORD || "CRYPT" }),
-      };
-    }
-    const store = blobs.store("wordle");
+    const store = getStore("wordle");
     const word = await store.get("current_word");
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ word: word ?? process.env.DEFAULT_WORD ?? "CRYPT" }),
+      body: JSON.stringify({ word: word ?? "CRYPT" }),
     };
   } catch (err) {
-    console.error("get-word error:", err);
+    // Return the actual error so we can diagnose
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ word: process.env.DEFAULT_WORD || "CRYPT" }),
+      body: JSON.stringify({ word: "CRYPT", debug_error: err.message }),
     };
   }
 };
