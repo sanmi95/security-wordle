@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Security Wordle — Daily Challenge</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy:       #00008B;
+    --navy-dark:  #00005a;
+    --navy-light: #e8e8f8;
+    --navy-mid:   #c8c8ee;
+    --red:        #D0021B;
+    --red-light:  #fce8eb;
+    --white:      #ffffff;
+    --off-white:  #f5f6fa;
+    --warm-grey:  #f0f0f5;
+
+    --correct-bg:     #1a7a3a;
+    --correct-text:   #ffffff;
+    --correct-border: #145e2c;
+    --present-bg:     #c07a00;
+    --present-text:   #ffffff;
+    --present-border: #9a6200;
+    --absent-bg:      #6b7280;
+    --absent-text:    #ffffff;
+    --absent-border:  #4b5563;
+
+    --text:     #1a1a2e;
+    --text-mid: #4a4a6a;
+    --text-dim: #8888aa;
+    --border:   #d0d0e8;
+    --shadow:   0 2px 12px rgba(0,0,139,0.10);
+    --shadow-lg:0 8px 32px rgba(0,0,139,0.15);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--off-white);
+    color: var(--text);
+    font-family: 'Nunito Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--navy) 0%, var(--red) 100%);
+    z-index: 100;
+  }
+
+  #app {
+    width: 100%;
+    max-width: 500px;
+    padding: 0 14px 50px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Loading overlay */
+  #loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--off-white);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    gap: 16px;
+    transition: opacity 0.4s ease;
+  }
+  #loading-overlay.fade-out { opacity: 0; pointer-events: none; }
+
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--navy-mid);
+    border-top-color: var(--navy);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+
+  /* Header */
+  header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 0 16px;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 18px;
+  }
+
+  .logo {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 900;
+    font-size: 1.5rem;
+    color: var(--navy);
+    letter-spacing: -0.01em;
+  }
+  .logo span { color: var(--red); }
+
+  .header-sub {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .admin-btn {
+    font-family: 'Nunito', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-mid);
+    background: var(--white);
+    border: 1.5px solid var(--border);
+    padding: 7px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: var(--shadow);
+  }
+  .admin-btn:hover { color: var(--navy); border-color: var(--navy); background: var(--navy-light); }
+
+  /* Status bar */
+  .status-bar {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .attempt-pips { display: flex; gap: 5px; }
+  .pip { width: 9px; height: 9px; border-radius: 50%; background: var(--border); transition: background 0.3s; }
+  .pip.used    { background: var(--text-dim); }
+  .pip.current { background: var(--navy); box-shadow: 0 0 0 2px var(--navy-light); }
+
+  /* Grid */
+  #grid { display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; }
+  .row  { display: flex; gap: 7px; }
+
+  .tile {
+    width: 60px; height: 60px;
+    border: 2.5px solid var(--border);
+    background: var(--white);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 900;
+    font-size: 1.5rem;
+    color: var(--text);
+    user-select: none;
+    transition: border-color 0.15s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .tile.active  { border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-light); }
+  .tile.filled  { border-color: var(--navy-mid); animation: pop 0.12s ease; }
+  .tile.correct { background: var(--correct-bg); border-color: var(--correct-border); color: #fff; box-shadow: 0 2px 8px rgba(26,122,58,0.25); }
+  .tile.present { background: var(--present-bg); border-color: var(--present-border); color: #fff; box-shadow: 0 2px 8px rgba(192,122,0,0.25); }
+  .tile.absent  { background: var(--absent-bg);  border-color: var(--absent-border);  color: #fff; }
+  .tile.shake   { animation: shake 0.4s ease; }
+
+  @keyframes pop {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.13); }
+    100% { transform: scale(1); }
+  }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20%     { transform: translateX(-6px); }
+    40%     { transform: translateX(6px); }
+    60%     { transform: translateX(-4px); }
+    80%     { transform: translateX(4px); }
+  }
+
+  /* Legend */
+  .legend {
+    width: 100%;
+    background: var(--white);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+  .legend-title {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 800;
+    font-size: 0.72rem;
+    color: var(--navy);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .legend-items { display: flex; flex-direction: column; gap: 7px; }
+  .legend-item  { display: flex; align-items: center; gap: 10px; font-size: 0.78rem; color: var(--text-mid); font-weight: 600; }
+  .legend-swatch { width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0; }
+  .legend-swatch.correct { background: var(--correct-bg); }
+  .legend-swatch.present { background: var(--present-bg); }
+  .legend-swatch.absent  { background: var(--absent-bg); }
+
+  /* Keyboard */
+  #keyboard { display: flex; flex-direction: column; gap: 7px; align-items: center; width: 100%; }
+  .kb-row   { display: flex; gap: 5px; }
+
+  .key {
+    height: 54px; min-width: 36px; padding: 0 5px;
+    border: none;
+    background: var(--white);
+    color: var(--text);
+    font-family: 'Nunito', sans-serif;
+    font-weight: 800; font-size: 0.82rem;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+    user-select: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.10), 0 1px 0 rgba(0,0,0,0.05);
+  }
+  .key:hover  { background: var(--navy-light); color: var(--navy); }
+  .key:active { transform: scale(0.94); }
+  .key.wide   { min-width: 58px; font-size: 0.7rem; }
+  .key.correct { background: var(--correct-bg); color: #fff; box-shadow: 0 2px 6px rgba(26,122,58,0.3); }
+  .key.present { background: var(--present-bg); color: #fff; box-shadow: 0 2px 6px rgba(192,122,0,0.3); }
+  .key.absent  { background: var(--absent-bg);  color: #fff; }
+
+  /* Toast */
+  #toast-container {
+    position: fixed; top: 72px; left: 50%; transform: translateX(-50%);
+    z-index: 200; display: flex; flex-direction: column; gap: 8px; align-items: center;
+  }
+  .toast {
+    background: var(--text); color: var(--white);
+    font-family: 'Nunito', sans-serif; font-weight: 700; font-size: 0.8rem;
+    padding: 10px 20px; border-radius: 20px;
+    animation: toastIn 0.25s ease, toastOut 0.3s ease 1.8s forwards;
+    white-space: nowrap; box-shadow: var(--shadow-lg);
+  }
+  .toast.success { background: var(--correct-bg); }
+  .toast.error   { background: var(--red); }
+
+  @keyframes toastIn  { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes toastOut { from { opacity:1; } to { opacity:0; } }
+
+  /* Modals */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,80,0.35);
+    backdrop-filter: blur(5px);
+    z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+    animation: fadeIn 0.25s ease;
+  }
+  .modal-overlay.hidden { display: none; }
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+  .modal {
+    background: var(--white);
+    border-radius: 20px;
+    padding: 28px 24px;
+    width: 92%; max-width: 380px;
+    position: relative;
+    box-shadow: var(--shadow-lg);
+    animation: slideUp 0.3s ease;
+  }
+  @keyframes slideUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+
+  .modal-close {
+    position: absolute; top: 14px; right: 16px;
+    background: var(--warm-grey); border: none;
+    color: var(--text-mid); font-size: 1rem;
+    width: 30px; height: 30px; border-radius: 50%;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; transition: background 0.15s;
+  }
+  .modal-close:hover { background: var(--navy-light); color: var(--navy); }
+
+  .modal-title { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 1.25rem; margin-bottom: 4px; color: var(--navy); }
+  .modal-title.win  { color: var(--correct-bg); }
+  .modal-title.lose { color: var(--red); }
+
+  .modal-subtitle { font-size: 0.82rem; color: var(--text-mid); margin-bottom: 20px; font-weight: 600; }
+  .modal-subtitle span { color: var(--navy); font-weight: 900; font-size: 1rem; letter-spacing: 0.06em; }
+
+  .stats-row { display: flex; gap: 10px; margin-bottom: 18px; }
+  .stat-card  { flex: 1; background: var(--off-white); border-radius: 12px; padding: 12px 8px; text-align: center; border: 1.5px solid var(--border); }
+  .stat-value { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 1.8rem; color: var(--navy); display: block; line-height: 1; margin-bottom: 3px; }
+  .stat-label { font-size: 0.65rem; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .share-preview {
+    background: var(--off-white); border: 1.5px solid var(--border); border-radius: 12px;
+    padding: 14px; margin-bottom: 16px;
+    font-family: 'Nunito Sans', sans-serif; font-size: 0.75rem; color: var(--text-mid);
+    font-weight: 600; white-space: pre; line-height: 1.9;
+  }
+
+  .modal-actions { display: flex; gap: 10px; }
+
+  .btn {
+    flex: 1; padding: 13px; border-radius: 12px;
+    font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 0.85rem;
+    cursor: pointer; transition: all 0.2s; border: none;
+  }
+  .btn-primary { background: var(--navy); color: var(--white); box-shadow: 0 4px 12px rgba(0,0,139,0.25); }
+  .btn-primary:hover { background: var(--navy-dark); box-shadow: 0 6px 18px rgba(0,0,139,0.35); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+  .btn-secondary { background: var(--off-white); color: var(--text-mid); border: 1.5px solid var(--border); }
+  .btn-secondary:hover { background: var(--navy-light); color: var(--navy); border-color: var(--navy); }
+  .btn-danger { background: var(--red-light); color: var(--red); border: 1.5px solid #f5c0c6; }
+  .btn-danger:hover { background: #f8d4d8; }
+
+  /* Admin modal */
+  .admin-modal { max-width: 340px; }
+
+  .lock-area { text-align: center; padding: 8px 0 16px; }
+  .lock-emoji { font-size: 2.8rem; margin-bottom: 10px; display: block; }
+  .lock-area p { font-size: 0.82rem; color: var(--text-mid); font-weight: 600; margin-bottom: 18px; line-height: 1.5; }
+
+  .field-group { margin-bottom: 14px; }
+  .field-label { font-size: 0.7rem; font-weight: 800; color: var(--text-mid); letter-spacing: 0.06em; text-transform: uppercase; display: block; margin-bottom: 6px; }
+
+  .field-input {
+    width: 100%; background: var(--off-white); border: 1.5px solid var(--border);
+    border-radius: 10px; padding: 11px 14px; color: var(--text);
+    font-family: 'Nunito', sans-serif; font-weight: 700; font-size: 1rem;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .field-input:focus { border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-light); }
+  .field-input.password { text-transform: none; letter-spacing: 0.1em; }
+
+  .field-hint { font-size: 0.68rem; font-weight: 600; color: var(--text-dim); margin-top: 5px; }
+  .field-hint.error   { color: var(--red); }
+  .field-hint.success { color: var(--correct-bg); }
+
+  .current-word-card {
+    background: var(--navy-light); border: 1.5px solid var(--navy-mid);
+    border-radius: 12px; padding: 14px; margin-bottom: 18px; text-align: center;
+  }
+  .current-word-card .label { font-size: 0.65rem; font-weight: 800; color: var(--navy); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+  .current-word-card .word  { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 1.8rem; color: var(--navy); letter-spacing: 0.2em; }
+
+  .divider { border: none; border-top: 1.5px solid var(--border); margin: 14px 0; }
+  .admin-action-stack { display: flex; flex-direction: column; gap: 8px; }
+
+  .hidden { display: none !important; }
+
+  @media (max-width: 380px) {
+    .tile { width: 52px; height: 52px; font-size: 1.25rem; }
+    .key  { height: 48px; min-width: 30px; font-size: 0.74rem; }
+    .key.wide { min-width: 50px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading screen -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Loading today's word…</div>
+</div>
+
+<div id="toast-container"></div>
+
+<div id="app">
+  <header>
+    <div>
+      <div class="logo">Security<span>Wordle</span></div>
+      <div class="header-sub">Daily Awareness Challenge</div>
+    </div>
+    <button class="admin-btn" onclick="openAdmin()">⚙ Admin</button>
+  </header>
+
+  <div class="status-bar">
+    <span id="date-display"></span>
+    <div class="attempt-pips" id="attempt-pips"></div>
+    <span id="attempts-label">6 attempts</span>
+  </div>
+
+  <div id="grid"></div>
+
+  <div class="legend">
+    <div class="legend-title">How to play</div>
+    <div class="legend-items">
+      <div class="legend-item"><div class="legend-swatch correct"></div><span>Right letter, right spot</span></div>
+      <div class="legend-item"><div class="legend-swatch present"></div><span>Right letter, wrong spot</span></div>
+      <div class="legend-item"><div class="legend-swatch absent"></div><span>Letter not in the word</span></div>
+    </div>
+  </div>
+
+  <div id="keyboard"></div>
+</div>
+
+<!-- END GAME MODAL -->
+<div class="modal-overlay hidden" id="end-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('end-modal')">✕</button>
+    <div class="modal-title" id="end-title"></div>
+    <div class="modal-subtitle" id="end-word"></div>
+    <div class="stats-row">
+      <div class="stat-card"><span class="stat-value" id="stat-attempts">—</span><span class="stat-label">Guesses</span></div>
+      <div class="stat-card"><span class="stat-value">6</span><span class="stat-label">Max</span></div>
+    </div>
+    <div class="share-preview" id="share-preview"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="copyShare()">📋 Share Result</button>
+      <button class="btn btn-secondary" onclick="closeModal('end-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN MODAL -->
+<div class="modal-overlay hidden" id="admin-modal">
+  <div class="modal admin-modal">
+    <button class="modal-close" onclick="closeAdmin()">✕</button>
+    <div class="modal-title" style="margin-bottom:16px">Admin Panel</div>
+
+    <div id="admin-locked-view" class="lock-area">
+      <span class="lock-emoji">🔐</span>
+      <p>Enter your admin password to manage today's word.</p>
+      <div class="field-group">
+        <label class="field-label">Password</label>
+        <input type="password" class="field-input password" id="admin-password-input" placeholder="••••••••"
+          onkeydown="if(event.key==='Enter') verifyAdmin()">
+        <div class="field-hint error hidden" id="admin-error">Incorrect password. Please try again.</div>
+      </div>
+      <button class="btn btn-primary" style="width:100%" id="signin-btn" onclick="verifyAdmin()">Sign In</button>
+    </div>
+
+    <div id="admin-panel-view" class="hidden">
+      <div class="current-word-card">
+        <div class="label">Today's Word</div>
+        <div class="word" id="admin-current-word">—</div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Set New Word (5 letters)</label>
+        <input type="text" class="field-input" id="new-word-input" maxlength="5" placeholder="ENTER"
+          oninput="this.value=this.value.toUpperCase()"
+          onkeydown="if(event.key==='Enter') setNewWord()">
+        <div class="field-hint" id="word-input-hint">Must be exactly 5 letters</div>
+      </div>
+
+      <div class="admin-action-stack">
+        <button class="btn btn-primary" id="deploy-btn" onclick="setNewWord()">✔ Deploy Word</button>
+        <hr class="divider">
+        <div class="field-group" style="margin-bottom:8px">
+          <label class="field-label">Change Password</label>
+          <input type="password" class="field-input password" id="new-password-input" placeholder="New password">
+          <div class="field-hint success hidden" id="pw-success">Password updated!</div>
+        </div>
+        <button class="btn btn-secondary" id="update-pw-btn" onclick="changePassword()">Update Password</button>
+        <button class="btn btn-danger" onclick="closeAdmin()">✕ Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════════════════
+const MAX_GUESSES  = 6;
+const WORD_LENGTH  = 5;
+const FALLBACK_WORD = 'CRYPT';
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+let targetWord   = FALLBACK_WORD;
+let guesses      = [];
+let currentGuess = '';
+let gameOver     = false;
+let shareRows    = [];
+let keyStates    = {};
+let adminPassword = ''; // cached for session after sign-in
+
+// ═══════════════════════════════════════════════════════
+//  API HELPERS
+// ═══════════════════════════════════════════════════════
+async function apiGetWord() {
+  const res = await fetch('/api/get-word');
+  const data = await res.json();
+  return (data.word || FALLBACK_WORD).toUpperCase();
+}
+
+async function apiSetWord(word, password) {
+  const res = await fetch('/api/set-word', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ word, password })
+  });
+  return res.json();
+}
+
+async function apiChangePassword(password, newPassword) {
+  const res = await fetch('/api/set-word', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password, newPassword })
+  });
+  return res.json();
+}
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+async function init() {
+  updateDate();
+  try {
+    targetWord = await apiGetWord();
+  } catch (e) {
+    console.warn('Could not fetch word, using fallback.', e);
+    targetWord = FALLBACK_WORD;
+  }
+  buildGrid();
+  buildKeyboard();
+  // Hide loading screen
+  const overlay = document.getElementById('loading-overlay');
+  overlay.classList.add('fade-out');
+  setTimeout(() => overlay.remove(), 450);
+
+  document.addEventListener('keydown', e => {
+    if (!document.getElementById('admin-modal').classList.contains('hidden')) return;
+    if (!document.getElementById('end-modal').classList.contains('hidden')) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'Enter') handleKey('Enter');
+    else if (e.key === 'Backspace') handleKey('Backspace');
+    else if (/^[a-zA-Z]$/.test(e.key)) handleKey(e.key.toUpperCase());
+  });
+}
+
+function updateDate() {
+  const d = new Date();
+  document.getElementById('date-display').textContent =
+    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// ═══════════════════════════════════════════════════════
+//  GRID
+// ═══════════════════════════════════════════════════════
+function buildGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  for (let r = 0; r < MAX_GUESSES; r++) {
+    const row = document.createElement('div');
+    row.className = 'row'; row.id = `row-${r}`;
+    for (let c = 0; c < WORD_LENGTH; c++) {
+      const tile = document.createElement('div');
+      tile.className = 'tile'; tile.id = `tile-${r}-${c}`;
+      row.appendChild(tile);
+    }
+    grid.appendChild(row);
+  }
+  updateGrid();
+}
+
+function updateGrid() {
+  for (let r = 0; r < guesses.length; r++) {
+    const g = guesses[r];
+    for (let c = 0; c < WORD_LENGTH; c++) {
+      const t = document.getElementById(`tile-${r}-${c}`);
+      t.textContent = g.word[c]; t.className = `tile ${g.result[c]}`;
+    }
+  }
+  if (!gameOver && guesses.length < MAX_GUESSES) {
+    const r = guesses.length;
+    for (let c = 0; c < WORD_LENGTH; c++) {
+      const t = document.getElementById(`tile-${r}-${c}`);
+      if (c < currentGuess.length) { t.textContent = currentGuess[c]; t.className = 'tile filled'; }
+      else { t.textContent = ''; t.className = c === currentGuess.length ? 'tile active' : 'tile'; }
+    }
+  }
+  updatePips();
+}
+
+function updatePips() {
+  const container = document.getElementById('attempt-pips');
+  container.innerHTML = '';
+  document.getElementById('attempts-label').textContent =
+    gameOver ? 'Game over' : `${MAX_GUESSES - guesses.length} remaining`;
+  for (let i = 0; i < MAX_GUESSES; i++) {
+    const pip = document.createElement('div');
+    if (i < guesses.length) pip.className = 'pip used';
+    else if (i === guesses.length && !gameOver) pip.className = 'pip current';
+    else pip.className = 'pip';
+    container.appendChild(pip);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  KEYBOARD
+// ═══════════════════════════════════════════════════════
+const KB_ROWS = [
+  ['Q','W','E','R','T','Y','U','I','O','P'],
+  ['A','S','D','F','G','H','J','K','L'],
+  ['ENTER','Z','X','C','V','B','N','M','⌫']
+];
+
+function buildKeyboard() {
+  const kb = document.getElementById('keyboard');
+  kb.innerHTML = '';
+  KB_ROWS.forEach(row => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'kb-row';
+    row.forEach(key => {
+      const btn = document.createElement('button');
+      btn.className = 'key' + (key.length > 1 ? ' wide' : '');
+      btn.textContent = key; btn.dataset.key = key;
+      btn.onclick = () => handleKey(key);
+      rowEl.appendChild(btn);
+    });
+    kb.appendChild(rowEl);
+  });
+}
+
+function updateKeyboard() {
+  Object.entries(keyStates).forEach(([k, state]) => {
+    const btn = document.querySelector(`[data-key="${k}"]`);
+    if (btn) btn.className = `key${k.length > 1 ? ' wide' : ''} ${state}`;
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  GAME LOGIC
+// ═══════════════════════════════════════════════════════
+function handleKey(key) {
+  if (gameOver) return;
+  if (key === '⌫' || key === 'Backspace') { currentGuess = currentGuess.slice(0,-1); updateGrid(); return; }
+  if (key === 'ENTER' || key === 'Enter') { submitGuess(); return; }
+  if (/^[A-Z]$/i.test(key) && currentGuess.length < WORD_LENGTH) {
+    currentGuess += key.toUpperCase();
+    const tile = document.getElementById(`tile-${guesses.length}-${currentGuess.length-1}`);
+    if (tile) { tile.classList.add('pop'); tile.addEventListener('animationend', () => tile.classList.remove('pop'), {once:true}); }
+    updateGrid();
+  }
+}
+
+function scoreGuess(guess, target) {
+  const result = Array(WORD_LENGTH).fill('absent');
+  const tArr = target.split(''), gArr = guess.split('');
+  const usedT = Array(WORD_LENGTH).fill(false), usedG = Array(WORD_LENGTH).fill(false);
+  for (let i = 0; i < WORD_LENGTH; i++) if (gArr[i]===tArr[i]) { result[i]='correct'; usedT[i]=usedG[i]=true; }
+  for (let i = 0; i < WORD_LENGTH; i++) {
+    if (usedG[i]) continue;
+    for (let j = 0; j < WORD_LENGTH; j++) {
+      if (!usedT[j] && gArr[i]===tArr[j]) { result[i]='present'; usedT[j]=true; break; }
+    }
+  }
+  return result;
+}
+
+function submitGuess() {
+  if (currentGuess.length < WORD_LENGTH) { shakeRow(guesses.length); showToast('Not enough letters!'); return; }
+
+  const result = scoreGuess(currentGuess, targetWord);
+  const rowEl  = document.getElementById(`row-${guesses.length}`);
+  const tiles  = rowEl.querySelectorAll('.tile');
+
+  tiles.forEach((tile, i) => {
+    setTimeout(() => {
+      tile.style.transform  = 'rotateX(90deg)';
+      tile.style.transition = 'transform 0.2s ease';
+      setTimeout(() => {
+        tile.textContent  = currentGuess[i];
+        tile.className    = `tile ${result[i]}`;
+        tile.style.transform  = 'rotateX(0deg)';
+      }, 200);
+    }, i * 80);
+  });
+
+  const PRIO = {correct:3, present:2, absent:1};
+  for (let i = 0; i < WORD_LENGTH; i++) {
+    const l = currentGuess[i], curr = keyStates[l];
+    if (!curr || PRIO[result[i]] > PRIO[curr]) keyStates[l] = result[i];
+  }
+
+  guesses.push({word: currentGuess, result});
+  shareRows.push([...result]);
+  const won = result.every(r => r === 'correct');
+  currentGuess = '';
+
+  setTimeout(() => {
+    updateKeyboard(); updateGrid();
+    if (won)                           { gameOver = true; setTimeout(() => showEndModal(true),  400); }
+    else if (guesses.length >= MAX_GUESSES) { gameOver = true; setTimeout(() => showEndModal(false), 400); }
+  }, WORD_LENGTH * 80 + 350);
+}
+
+function shakeRow(rowIdx) {
+  const row = document.getElementById(`row-${rowIdx}`);
+  if (!row) return;
+  row.querySelectorAll('.tile').forEach(t => {
+    t.classList.add('shake');
+    t.addEventListener('animationend', () => t.classList.remove('shake'), {once:true});
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════
+function showToast(msg, type='') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`; t.textContent = msg;
+  c.appendChild(t); setTimeout(() => t.remove(), 2200);
+}
+
+// ═══════════════════════════════════════════════════════
+//  END MODAL
+// ═══════════════════════════════════════════════════════
+const EMOJIS = {correct:'🟦', present:'🟨', absent:'⬜'};
+
+function buildShareText() {
+  const header = `Security Wordle ${guesses.length}/${MAX_GUESSES}`;
+  const rows   = shareRows.map(row => row.map(r => EMOJIS[r]).join('')).join('\n');
+  const link   = window.location.href.split('?')[0];
+  return `${header}\n\n${rows}\n\n🔒 ${link}`;
+}
+
+function showEndModal(won) {
+  const title = document.getElementById('end-title');
+  const word  = document.getElementById('end-word');
+  title.textContent = won ? '🎉 You got it!' : 'Nice try!';
+  title.className   = `modal-title ${won ? 'win' : 'lose'}`;
+  word.innerHTML = won
+    ? `Solved in <span>${guesses.length}</span> guess${guesses.length!==1?'es':''}`
+    : `The word was <span>${targetWord}</span>`;
+  document.getElementById('stat-attempts').textContent = won ? guesses.length : '✕';
+  document.getElementById('share-preview').textContent = buildShareText();
+  document.getElementById('end-modal').classList.remove('hidden');
+}
+
+function copyShare() {
+  navigator.clipboard.writeText(buildShareText())
+    .then(() => showToast('Copied to clipboard!', 'success'))
+    .catch(() => showToast('Could not copy — try manually.'));
+}
+
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+// ═══════════════════════════════════════════════════════
+//  ADMIN
+// ═══════════════════════════════════════════════════════
+function openAdmin() {
+  document.getElementById('admin-locked-view').classList.remove('hidden');
+  document.getElementById('admin-panel-view').classList.add('hidden');
+  document.getElementById('admin-error').classList.add('hidden');
+  document.getElementById('admin-password-input').value = '';
+  document.getElementById('admin-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('admin-password-input').focus(), 100);
+}
+
+function closeAdmin() { closeModal('admin-modal'); }
+
+async function verifyAdmin() {
+  const pw  = document.getElementById('admin-password-input').value;
+  const btn = document.getElementById('signin-btn');
+  btn.textContent = 'Checking…'; btn.disabled = true;
+
+  // Verify by attempting a no-op: send password with no word/newPassword
+  // We'll use a lightweight probe — just try fetching the word to confirm network is up,
+  // then rely on set-word to validate on actual actions.
+  // Instead, cache the password and validate it on first real action.
+  // For UX, we trust the password here and show error only when deploying.
+  adminPassword = pw;
+  document.getElementById('admin-error').classList.add('hidden');
+  document.getElementById('admin-locked-view').classList.add('hidden');
+  document.getElementById('admin-panel-view').classList.remove('hidden');
+  document.getElementById('admin-current-word').textContent = targetWord;
+  btn.textContent = 'Sign In'; btn.disabled = false;
+}
+
+async function setNewWord() {
+  const input = document.getElementById('new-word-input').value.trim().toUpperCase();
+  const hint  = document.getElementById('word-input-hint');
+
+  if (!/^[A-Z]{5}$/.test(input)) {
+    hint.textContent = '⚠ Please enter exactly 5 letters.';
+    hint.className   = 'field-hint error'; return;
+  }
+
+  const btn = document.getElementById('deploy-btn');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+
+  try {
+    const result = await apiSetWord(input, adminPassword);
+    if (result.error) {
+      if (result.error === 'Unauthorized') {
+        // Wrong password — kick back to login
+        document.getElementById('admin-panel-view').classList.add('hidden');
+        document.getElementById('admin-locked-view').classList.remove('hidden');
+        document.getElementById('admin-error').classList.remove('hidden');
+      } else {
+        hint.textContent = `⚠ ${result.error}`;
+        hint.className   = 'field-hint error';
+      }
+    } else {
+      targetWord = input;
+      document.getElementById('admin-current-word').textContent = input;
+      hint.textContent = `✔ Word updated to: ${input}`;
+      hint.className   = 'field-hint success';
+      document.getElementById('new-word-input').value = '';
+      resetGame();
+      showToast(`Word updated to: ${input}`, 'success');
+    }
+  } catch (e) {
+    hint.textContent = '⚠ Network error. Please try again.';
+    hint.className   = 'field-hint error';
+  }
+
+  btn.textContent = '✔ Deploy Word'; btn.disabled = false;
+}
+
+async function changePassword() {
+  const newPw = document.getElementById('new-password-input').value;
+  const btn   = document.getElementById('update-pw-btn');
+
+  if (newPw.length < 4) { showToast('Password too short (min 4 characters)', 'error'); return; }
+
+  btn.textContent = 'Saving…'; btn.disabled = true;
+  try {
+    const result = await apiChangePassword(adminPassword, newPw);
+    if (result.error) {
+      if (result.error === 'Unauthorized') {
+        document.getElementById('admin-panel-view').classList.add('hidden');
+        document.getElementById('admin-locked-view').classList.remove('hidden');
+        document.getElementById('admin-error').classList.remove('hidden');
+      } else {
+        showToast(`Error: ${result.error}`, 'error');
+      }
+    } else {
+      adminPassword = newPw; // update cached password
+      const el = document.getElementById('pw-success');
+      el.classList.remove('hidden');
+      document.getElementById('new-password-input').value = '';
+      setTimeout(() => el.classList.add('hidden'), 2500);
+    }
+  } catch (e) {
+    showToast('Network error. Please try again.', 'error');
+  }
+  btn.textContent = 'Update Password'; btn.disabled = false;
+}
+
+// ═══════════════════════════════════════════════════════
+//  RESET
+// ═══════════════════════════════════════════════════════
+function resetGame() {
+  guesses=[]; currentGuess=''; gameOver=false; shareRows=[]; keyStates={};
+  buildGrid(); buildKeyboard();
+}
+
+init();
+</script>
+</body>
+</html>
