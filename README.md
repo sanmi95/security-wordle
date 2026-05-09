@@ -1,4 +1,4 @@
-# 🔒 Security Wordle: Daily Awareness Challenge
+# Security Wordle: Daily Awareness Challenge
 
 > A Wordle-style daily security awareness game built for enterprise security teams. Employees guess a cybersecurity term in 6 attempts, reinforcing security vocabulary through daily gamified engagement.
 
